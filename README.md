@@ -55,6 +55,17 @@ default_subagent_reasoning_effort = "max"
 
 只有在用户明确要求跨 Codex 会话保存、恢复或接管任务，或需要在本地运行时强制路由到 `gpt-5.6-luna` + `max` 时，才考虑安装外部桥接器。它要求 Windows 和 Python 3.12 或更高版本：
 
+发布版本可直接从 PyPI 安装：
+
+```powershell
+python -m pip install luna-agent-bridge
+luna-agent install
+```
+
+也可以从 [GitHub Releases](https://github.com/ZaviWayne/luna-agent-bridge/releases/latest) 下载 Windows 单文件 `luna-agent.exe`，无需配置 Python。下载后可用 `.\luna-agent.exe --help` 查看命令；首次使用外部桥接器前运行 `.\luna-agent.exe install`。
+
+如果需要从源码开发或测试，再使用下面的可编辑安装方式：
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -149,4 +160,3 @@ luna-agent uninstall --purge-data --yes
 发布前请移除 `.venv`、`build`、`dist`、`outputs`、`__pycache__` 和运行日志。Skill 与插件清单应通过对应的官方校验脚本。
 
 项目采用 MIT License，详见 [LICENSE](LICENSE)。
-
