@@ -2,7 +2,10 @@
   "name": "luna-agent-bridge",
   "version": "0.1.1",
   "description": "Opt-in Windows bridge for users who explicitly need persistent external Luna tasks.",
+  "homepage": "https://github.com/ZaviWayne/luna-agent-bridge",
+  "repository": "https://github.com/ZaviWayne/luna-agent-bridge",
   "license": "MIT",
+  "keywords": ["codex", "skill", "windows", "task-persistence"],
   "author": {
     "name": "Luna Agent Bridge contributors"
   },
@@ -14,6 +17,13 @@
     "developerName": "Luna Agent Bridge contributors",
     "category": "Productivity",
     "capabilities": ["Interactive", "Write"],
-    "defaultPrompt": "Use Luna Agent Bridge only when I explicitly request the external persistent bridge."
+    "websiteURL": "https://github.com/ZaviWayne/luna-agent-bridge",
+    "privacyPolicyURL": "https://github.com/ZaviWayne/luna-agent-bridge/blob/master/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/ZaviWayne/luna-agent-bridge/blob/master/TERMS.md",
+    "defaultPrompt": [
+      "Use the external bridge only when I explicitly request persistence.",
+      "Check the status of my external Luna task.",
+      "Recover my external bridge task by its ID."
+    ]
   }
 }
