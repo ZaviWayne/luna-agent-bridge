@@ -70,6 +70,18 @@ class ReleaseLayoutTests(unittest.TestCase):
                 with self.subTest(path=path, fragment=fragment):
                     self.assertNotIn(fragment, content)
 
+    def test_public_docs_explain_model_routing_motivation(self):
+        readme_text = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+        pyproject_text = (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+        self.assertIn("模型路由", readme_text)
+        self.assertIn("gpt-5.6-luna", readme_text)
+        self.assertIn("max", readme_text)
+        self.assertIn("成本", readme_text)
+        self.assertIn("cross-session", pyproject_text)
+        self.assertIn("gpt-5.6-luna", pyproject_text)
+
 
 if __name__ == "__main__":
     unittest.main()
+

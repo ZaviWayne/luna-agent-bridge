@@ -1,48 +1,69 @@
 # Luna Agent Bridge
 
-这是一个 Windows/Python 本地项目，包含两个明确分离的交付物：
+让 Codex 用户把适合的子 Agent 任务路由到 \`gpt-5.6-luna\`，在主 Agent 保持高能力的同时，为高频、边界清晰的任务提供更可控的成本与质量选择；需要时再启用本地队列和跨会话恢复。
 
-1. `packages/native-luna-subagents`：推荐的 Codex 原生 Luna 子 Agent Skill。
-2. `plugins/luna-agent-bridge`：用户明确选择后才使用的外部桥接插件。
+## 为什么做这个项目
 
-外部桥接器不是 Codex 官方原生功能。它可以通过本地 Codex CLI、Windows Named Pipe 和 SQLite 提供任务消息排队、跨会话接管和显式恢复；这些能力不属于原生 Skill 的承诺范围。
+Codex 主 Agent 通常负责需求理解、方案判断和最终整合。代码审查、测试执行、资料整理、局部搜索等子任务边界更清晰，用户可能希望用更适合高频任务的模型配置，而不是让每个子任务都沿用主 Agent 的配置。
+
+这个项目把两个概念明确分开：\`gpt-5.6-luna\` 是模型，\`max\` 是推理强度；本项目的桥接运行时会将这组配置传给 Codex CLI。这样做的目标是让用户可以对不同任务做有意识的模型路由，并据自己的任务、账号和运行环境测量成本、延迟与质量。它不承诺固定比例的省钱效果，也不保证所有 Codex 运行环境都开放该模型。
+
+可以把任务流理解为：
+
+\`\`\`text
+主 Agent（负责规划、判断和整合）
+├─ 复杂或高风险任务 ───────────────→ 主 Agent 使用的高能力模型
+└─ 高频、边界清晰的子任务 ─────────→ gpt-5.6-luna + max
+                                      └─ 可选：本地队列与跨会话恢复
+\`\`\`
+
+## 选择哪条路径
+
+| 需求 | 推荐路径 |
+| --- | --- |
+| 普通拆解、代码审查、测试或资料整理 | Codex 原生子 Agent + 本项目提供的 Skill |
+| 希望显式指定 \`gpt-5.6-luna\` 和 \`max\` | 外部桥接器（在运行环境允许时） |
+| 需要跨 Codex 会话保存、恢复或接管任务 | 外部桥接器 |
+| 只需要当前会话内的并发协作 | 优先使用 Codex 原生子 Agent |
+
+原生子 Agent 由 Codex 运行环境负责调度，通常是最轻量的路径。外部桥接器是可选兼容层，不是 Codex 官方原生功能；它不能把原生子 Agent 的内部通道、侧边栏展示或生命周期承诺扩展到所有环境。
 
 ## 推荐路径：原生 Skill
 
-普通的任务拆解、代码审查、测试和资料整理应使用 Codex 原生子 Agent。Skill 只提供拆解、并发、文件归属、消息交接和验证规则，不启动 Broker、不修改 PATH、不保存凭据，也不承诺跨会话持久化。
+这是普通任务拆解的默认入口。Skill 只提供拆解、并发、文件归属、消息交接和验证规则，不启动 Broker、不修改 PATH、不保存凭据，也不承诺跨会话持久化。
 
 将 Skill 复制到用户级 Skill 目录（Windows PowerShell）：
 
-```powershell
-$skillRoot = if ($env:CODEX_HOME) { Join-Path $env:CODEX_HOME 'skills' } else { Join-Path $env:USERPROFILE '.codex\skills' }
-Copy-Item -Recurse -Force '.\packages\native-luna-subagents' (Join-Path $skillRoot 'native-luna-subagents')
-```
+\`\`\`powershell
+$skillRoot = if ($env:CODEX_HOME) { Join-Path $env:CODEX_HOME 'skills' } else { Join-Path $env:USERPROFILE '.codex\\skills' }
+Copy-Item -Recurse -Force '.\\packages\\native-luna-subagents' (Join-Path $skillRoot 'native-luna-subagents')
+\`\`\`
 
 若运行环境支持用户级 Agent 配置，可以将模型和推理强度设为：
 
-```toml
+\`\`\`toml
 [agents]
 enabled = true
 max_concurrent_threads_per_session = 4
 default_subagent_model = "gpt-5.6-luna"
 default_subagent_reasoning_effort = "max"
-```
+\`\`\`
 
 模型是否可用、子 Agent 是否显示在侧边栏，以及会话关闭后的生命周期，仍由 Codex 运行环境决定；本项目不把它们包装成持久化保证。
 
 ## 可选路径：外部桥接器
 
-只有在用户明确要求跨 Codex 会话保存、恢复或接管任务时，才考虑安装外部桥接器。它要求 Windows 和 Python 3.12 或更高版本：
+只有在用户明确要求跨 Codex 会话保存、恢复或接管任务，或需要在本地运行时强制路由到 \`gpt-5.6-luna\` + \`max\` 时，才考虑安装外部桥接器。它要求 Windows 和 Python 3.12 或更高版本：
 
-```powershell
+\`\`\`powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\\.venv\\Scripts\\python.exe -m pip install -e ".[dev]"
 luna-agent install
-```
+\`\`\`
 
 常用命令：
 
-```powershell
+\`\`\`powershell
 luna-agent spawn --name reviewer --cwd <workspace-path> --task "检查当前修改"
 luna-agent status <agent-id>
 luna-agent send <agent-id> "补充检查边界条件"
@@ -50,25 +71,48 @@ luna-agent wait <agent-id> --timeout 300
 luna-agent result <agent-id>
 luna-agent interrupt <agent-id>
 luna-agent archive <agent-id>
-```
+\`\`\`
 
-外部桥接器默认将状态保存到 `%LOCALAPPDATA%\CodexLunaAgent`。运行中的消息会排队到当前轮次边界，不能像原生内部通道一样即时注入模型生成过程。
+桥接器通过本地 Codex CLI 启动任务，并传递：
+
+\`\`\`text
+--model gpt-5.6-luna
+--config model_reasoning_effort="max"
+\`\`\`
+
+本地状态默认保存到 \`%LOCALAPPDATA%\\CodexLunaAgent\`，包括任务元数据、事件和恢复所需的队列状态。运行中的消息会排队到当前轮次边界，不能像原生内部通道一样即时注入模型生成过程。
 
 用户准备关闭 Codex 时，必须先中断仍在运行的外部 Agent，再执行：
 
-```powershell
+\`\`\`powershell
 luna-agent broker shutdown
-```
+\`\`\`
 
 不要假设关闭 Codex 会自动回收外部 Broker。普通卸载保留数据库；只有用户明确确认后才执行：
 
-```powershell
+\`\`\`powershell
 luna-agent uninstall --purge-data --yes
-```
+\`\`\`
+
+## 能力边界
+
+桥接器提供：
+
+- 面向本地 Codex CLI 的显式模型与推理强度路由。
+- SQLite 状态存储、任务事件、消息队列和恢复入口。
+- 在工作区切换或重新打开 Codex 后，通过任务 ID 查询、发送、等待和接管。
+- 最多 4 个本地 Worker，并在 Broker 关闭时停止其管理的进程。
+
+桥接器不提供：
+
+- Codex 官方原生子 Agent、官方侧边栏展示或官方生命周期保证。
+- 绕过账号权限、模型可用性、沙箱或批准策略的能力。
+- 固定的成本节省比例、固定延迟或跨账号的模型可用性承诺。
+- 远程 TCP 控制；状态和控制面默认只在本机 Named Pipe 上工作。
 
 ## 插件入口
 
-`plugins/luna-agent-bridge` 包含 `.codex-plugin/plugin.json` 和一个明确标注为“可选兼容层”的 Skill。它不会自动安装可执行文件、修改全局配置或添加个人 Marketplace 条目；请通过 Codex 的本地插件安装流程显式添加。
+\`plugins/luna-agent-bridge\` 包含 \`.codex-plugin/plugin.json\` 和一个明确标注为“可选兼容层”的 Skill。它不会自动安装可执行文件、修改全局配置或添加个人 Marketplace 条目；请通过 Codex 的本地插件安装流程显式添加。
 
 ## 安全边界
 
@@ -80,10 +124,13 @@ luna-agent uninstall --purge-data --yes
 
 ## 开发与测试
 
-```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -q
-```
+\`\`\`powershell
+.\\.venv\\Scripts\\python.exe -m unittest discover -s tests -q
+\`\`\`
 
-发布前请移除 `.venv`、`build`、`dist`、`outputs`、`__pycache__` 和运行日志。Skill 与插件清单应通过对应的官方校验脚本。
+\`tests/fixtures\` 中的 JSONL 文件是确定性的 Codex CLI 响应样本，用于在不访问网络、不消耗模型调用额度的情况下覆盖解析、事件和恢复逻辑；它们是测试输入，不会被打包到运行时。
+
+发布前请移除 \`.venv\`、\`build\`、\`dist\`、\`outputs\`、\`__pycache__\` 和运行日志。Skill 与插件清单应通过对应的官方校验脚本。
 
 项目采用 MIT License，详见 [LICENSE](LICENSE)。
+
