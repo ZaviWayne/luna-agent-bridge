@@ -80,6 +80,13 @@ class ReleaseLayoutTests(unittest.TestCase):
         self.assertIn("cross-session", pyproject_text)
         self.assertIn("gpt-5.6-luna", pyproject_text)
 
+    def test_bridge_setup_documents_virtual_environment_command_resolution(self):
+        readme_text = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn(r".\.venv\Scripts\Activate.ps1", readme_text)
+        self.assertIn('python -m pip install -e ".[dev]"', readme_text)
+        self.assertIn(r".\.venv\Scripts\luna-agent.exe", readme_text)
+
 
 if __name__ == "__main__":
     unittest.main()

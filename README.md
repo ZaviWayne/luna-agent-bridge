@@ -57,11 +57,27 @@ default_subagent_reasoning_effort = "max"
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
 luna-agent install
 ```
 
+激活成功后，当前 PowerShell 提示符会带有 `(.venv)`，后续可以直接使用 `luna-agent`。如果不希望激活虚拟环境，改用虚拟环境中的完整路径：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\luna-agent.exe install
+```
+
+如果 PowerShell 阻止执行 `Activate.ps1`，可以在当前窗口临时放宽策略后重试，或直接使用上面的完整路径方式：
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
 常用命令：
+
+以下命令假设虚拟环境已经激活；未激活时，请将命令前缀替换为 `.\.venv\Scripts\luna-agent.exe`。
 
 ```powershell
 luna-agent spawn --name reviewer --cwd <workspace-path> --task "检查当前修改"
