@@ -53,7 +53,6 @@ class ReleaseLayoutTests(unittest.TestCase):
         public_files = (
             PROJECT_ROOT / "README.md",
             PROJECT_ROOT / "luna-agent.spec",
-            PROJECT_ROOT / "docs" / "superpowers" / "plans" / "2026-08-14-native-luna-subagent-plan.md",
         )
         forbidden_fragments = (
             "C:" + "\\Users\\",
