@@ -1,0 +1,7 @@
+interface:
+  display_name: "Native Luna Subagents"
+  short_description: "Coordinate native Luna subagents safely"
+  default_prompt: "Use $native-luna-subagents to split independent work across native Luna agents."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,19 @@
+{
+  "name": "luna-agent-bridge",
+  "version": "0.1.0",
+  "description": "Opt-in Windows bridge for users who explicitly need persistent external Luna tasks.",
+  "license": "MIT",
+  "author": {
+    "name": "Luna Agent Bridge contributors"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Luna Agent Bridge",
+    "shortDescription": "Opt-in Windows bridge for persistent tasks.",
+    "longDescription": "A non-official, opt-in Windows bridge for users who explicitly need cross-session task persistence. It is separate from Codex native subagents and does not start or install a broker automatically.",
+    "developerName": "Luna Agent Bridge contributors",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "defaultPrompt": "Use Luna Agent Bridge only when I explicitly request the external persistent bridge."
+  }
+}
