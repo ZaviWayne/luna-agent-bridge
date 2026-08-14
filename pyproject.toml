@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "luna-agent-bridge"
+version = "0.1.0"
+description = "Persistent local bridge for Codex Luna sub-agents"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["PyYAML>=6.0"]
+
+[project.scripts]
+luna-agent = "luna_agent_bridge.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

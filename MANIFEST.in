@@ -1,0 +1,17 @@
+include README.md
+include LICENSE
+include CONTRIBUTING.md
+include SECURITY.md
+include CODE_OF_CONDUCT.md
+recursive-include src *.py
+recursive-include tests *.py
+recursive-include assets *
+recursive-include packages *
+recursive-include plugins *
+recursive-include docs *.md
+global-exclude *.py[cod]
+global-exclude *.log
+prune .venv
+prune build
+prune dist
+prune outputs
