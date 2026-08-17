@@ -80,7 +80,76 @@ class ReleaseLayoutTests(unittest.TestCase):
         self.assertIn("cross-session", pyproject_text)
         self.assertIn("gpt-5.6-luna", pyproject_text)
 
+    def test_bridge_setup_documents_virtual_environment_command_resolution(self):
+        readme_text = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn(r".\.venv\Scripts\Activate.ps1", readme_text)
+        self.assertIn('python -m pip install -e ".[dev]"', readme_text)
+        self.assertIn(r".\.venv\Scripts\luna-agent.exe", readme_text)
+
+    def test_github_ci_and_feedback_entrypoints_exist(self):
+        workflow_path = PROJECT_ROOT / ".github" / "workflows" / "ci.yml"
+        bug_report_path = PROJECT_ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.md"
+        feature_request_path = PROJECT_ROOT / ".github" / "ISSUE_TEMPLATE" / "feature_request.md"
+        issue_config_path = PROJECT_ROOT / ".github" / "ISSUE_TEMPLATE" / "config.yml"
+
+        for path in (workflow_path, bug_report_path, feature_request_path, issue_config_path):
+            with self.subTest(path=path):
+                self.assertTrue(path.is_file())
+
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+        bug_report_text = bug_report_path.read_text(encoding="utf-8")
+        feature_request_text = feature_request_path.read_text(encoding="utf-8")
+        issue_config_text = issue_config_path.read_text(encoding="utf-8")
+
+        self.assertIn("windows-latest", workflow_text)
+        self.assertIn('python-version: "3.12"', workflow_text)
+        self.assertIn("python -m unittest discover -s tests -q", workflow_text)
+        self.assertIn("## 环境信息", bug_report_text)
+        self.assertIn("## 复现步骤", bug_report_text)
+        self.assertIn("## 背景与问题", feature_request_text)
+        self.assertIn("blank_issues_enabled: true", issue_config_text)
+
+    def test_release_packaging_contract_exists(self):
+        script_path = PROJECT_ROOT / "scripts" / "package-release.ps1"
+        self.assertTrue(script_path.is_file())
+        script_text = script_path.read_text(encoding="utf-8")
+
+        for marker in (
+            "param(",
+            "python -m unittest discover -s tests -q",
+            "python -m build",
+            "python -m twine check",
+            "SHA256SUMS.txt",
+            "luna-agent.exe",
+            "luna_agent_bridge-",
+            "luna-agent-bridge-plugin-",
+            "luna-agent-bridge-skill-",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, script_text)
+
+    def test_release_workflow_contract_exists(self):
+        workflow_path = PROJECT_ROOT / ".github" / "workflows" / "release.yml"
+        self.assertTrue(workflow_path.is_file())
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+
+        for marker in (
+            'v*.*.*',
+            "windows-latest",
+            'python-version: "3.12"',
+            "package-release.ps1",
+            "actions/upload-artifact@v4",
+            "actions/download-artifact@v4",
+            "pypa/gh-action-pypi-publish@release/v1",
+            "id-token: write",
+            "contents: write",
+            "gh release create",
+            "gh release edit",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, workflow_text)
+
 
 if __name__ == "__main__":
     unittest.main()
-
