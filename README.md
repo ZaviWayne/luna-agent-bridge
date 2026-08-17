@@ -55,13 +55,40 @@ default_subagent_reasoning_effort = "max"
 
 只有在用户明确要求跨 Codex 会话保存、恢复或接管任务，或需要在本地运行时强制路由到 `gpt-5.6-luna` + `max` 时，才考虑安装外部桥接器。它要求 Windows 和 Python 3.12 或更高版本：
 
+发布版本可直接从 PyPI 安装：
+
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+python -m pip install luna-agent-bridge
 luna-agent install
 ```
 
+也可以从 [GitHub Releases](https://github.com/ZaviWayne/luna-agent-bridge/releases/latest) 下载 Windows 单文件 `luna-agent.exe`，无需配置 Python。下载后可用 `.\luna-agent.exe --help` 查看命令；首次使用外部桥接器前运行 `.\luna-agent.exe install`。
+
+如果需要从源码开发或测试，再使用下面的可编辑安装方式：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+luna-agent install
+```
+
+激活成功后，当前 PowerShell 提示符会带有 `(.venv)`，后续可以直接使用 `luna-agent`。如果不希望激活虚拟环境，改用虚拟环境中的完整路径：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\luna-agent.exe install
+```
+
+如果 PowerShell 阻止执行 `Activate.ps1`，可以在当前窗口临时放宽策略后重试，或直接使用上面的完整路径方式：
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
 常用命令：
+
+以下命令假设虚拟环境已经激活；未激活时，请将命令前缀替换为 `.\.venv\Scripts\luna-agent.exe`。
 
 ```powershell
 luna-agent spawn --name reviewer --cwd <workspace-path> --task "检查当前修改"
@@ -130,7 +157,24 @@ luna-agent uninstall --purge-data --yes
 
 `tests/fixtures` 中的 JSONL 文件是确定性的 Codex CLI 响应样本，用于在不访问网络、不消耗模型调用额度的情况下覆盖解析、事件和恢复逻辑；它们是测试输入，不会被打包到运行时。
 
+## 自动发布 GitHub Release 和 PyPI
+
+仓库包含 Tag 触发的 `.github/workflows/release.yml`。首次使用前，在 PyPI 的 Trusted Publishers 设置中登记：
+
+- Owner：`ZaviWayne`
+- Repository：`luna-agent-bridge`
+- Workflow：`.github/workflows/release.yml`
+- GitHub Environment：`pypi`
+
+之后，更新 `pyproject.toml` 版本并提交，再推送同版本 Tag：
+
+```powershell
+git tag v0.1.2
+git push origin v0.1.2
+```
+
+Workflow 会从这个 Tag 构建 Windows EXE、wheel、sdist、插件包、Skill 包和校验文件，先创建 GitHub Release 草稿，再发布到 PyPI，最后公开 GitHub Release。Tag 与 `pyproject.toml` 版本不一致时会在发布前失败。不要移动已经公开的 Tag。
+
 发布前请移除 `.venv`、`build`、`dist`、`outputs`、`__pycache__` 和运行日志。Skill 与插件清单应通过对应的官方校验脚本。
 
 项目采用 MIT License，详见 [LICENSE](LICENSE)。
-

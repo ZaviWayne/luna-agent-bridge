@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build release artifacts
+    runs-on: windows-latest
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build and validate release
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') {
+              throw "Invalid release tag: $tag"
+          }
+          .\scripts\package-release.ps1 -Version $tag.Substring(1)
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.ref_name }}
+          path: outputs/release/${{ github.ref_name }}/
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release and PyPI package
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/luna-agent-bridge
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-${{ github.ref_name }}
+          path: release
+
+      - name: Check release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f release/luna-agent.exe
+          test -f release/SHA256SUMS.txt
+          test "$(find release -maxdepth 1 -name '*.whl' | wc -l)" -eq 1
+          test "$(find release -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 1
+          test -f "release/luna-agent-bridge-plugin-${GITHUB_REF_NAME#v}.zip"
+          test -f "release/luna-agent-bridge-skill-${GITHUB_REF_NAME#v}.zip"
+
+      - name: Create draft GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --draft \
+            --title "Luna Agent Bridge $GITHUB_REF_NAME" \
+            --generate-notes \
+            release/luna-agent.exe \
+            release/*.whl \
+            release/*.tar.gz \
+            release/luna-agent-bridge-plugin-*.zip \
+            release/luna-agent-bridge-skill-*.zip \
+            release/SHA256SUMS.txt
+
+      - name: Prepare Python distributions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p python-dist
+          cp release/*.whl release/*.tar.gz python-dist/
+
+      - name: Publish Python distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python-dist/
+          skip-existing: false
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false
