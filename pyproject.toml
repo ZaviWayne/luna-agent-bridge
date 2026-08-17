@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "luna-agent-bridge"
-version = "0.1.1"
+version = "0.1.2"
 description = "Cost-conscious local bridge for routing Codex sub-agent tasks to gpt-5.6-luna with optional cross-session persistence"
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.12"
