@@ -150,6 +150,5 @@ class ReleaseLayoutTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, workflow_text)
 
-
 if __name__ == "__main__":
     unittest.main()
