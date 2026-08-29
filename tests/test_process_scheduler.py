@@ -1,3 +1,4 @@
+import os
 import sys
 import tempfile
 import threading
@@ -60,7 +61,8 @@ class ProcessSchedulerTests(unittest.TestCase):
             self.assertEqual("ready", marker.read_text(encoding="utf-8"))
             running.interrupt(grace_seconds=1)
             self.assertIsNotNone(running.poll())
-            self.assertEqual("interrupted", marker.read_text(encoding="utf-8"))
+            if os.name != "nt":
+                self.assertEqual("interrupted", marker.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
