@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 import json
-from pathlib import PureWindowsPath
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 
 
@@ -92,8 +92,8 @@ def decode_request(raw: bytes) -> BrokerRequest:
         raise ProtocolError(f"未知 Broker 命令：{command}")
     if not isinstance(params, dict):
         raise ProtocolError("params 必须为对象")
-    if not isinstance(cwd, str) or not _is_absolute_windows_path(cwd):
-        raise ProtocolError("cwd 必须为绝对 Windows 路径")
+    if not isinstance(cwd, str) or not _is_absolute_path(cwd):
+        raise ProtocolError("cwd 必须为绝对路径")
     return BrokerRequest(PROTOCOL_VERSION, request_id, command, params, cwd)
 
 
@@ -146,9 +146,10 @@ def _decode(raw: bytes) -> dict[str, Any]:
     return payload
 
 
-def _is_absolute_windows_path(value: str) -> bool:
-    path = PureWindowsPath(value)
-    return path.is_absolute() and bool(path.drive)
+def _is_absolute_path(value: str) -> bool:
+    windows_path = PureWindowsPath(value)
+    is_windows_absolute = windows_path.is_absolute() and bool(windows_path.drive)
+    return is_windows_absolute or PurePosixPath(value).is_absolute()
 
 
 def _json_value(value: Any) -> Any:

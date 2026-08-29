@@ -57,6 +57,7 @@ class ProcessSchedulerTests(unittest.TestCase):
             time.sleep(0.2)
             running.interrupt(grace_seconds=1)
             self.assertIsNotNone(running.poll())
+            self.assertEqual("interrupted", marker.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

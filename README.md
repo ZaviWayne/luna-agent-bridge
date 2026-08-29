@@ -1,45 +1,57 @@
 # Luna Agent Bridge
 
-让 Codex 用户把适合的子 Agent 任务路由到 `gpt-5.6-luna`，在主 Agent 保持高能力的同时，为高频、边界清晰的任务提供更可控的成本与质量选择；需要时再启用本地队列和跨会话恢复。
+English | [中文](README_CN.md)
 
-## 为什么做这个项目
+Use Codex native subagents by default and route suitable tasks to `gpt-5.6-luna` through the native `[agents]` configuration. Enable the external bridge only when cross-session persistence, recovery, or task adoption is explicitly required.
 
-Codex 主 Agent 通常负责需求理解、方案判断和最终整合。代码审查、测试执行、资料整理、局部搜索等子任务边界更清晰，用户可能希望用更适合高频任务的模型配置，而不是让每个子任务都沿用主 Agent 的配置。
+## Why This Project Exists
 
-这个项目把两个概念明确分开：`gpt-5.6-luna` 是模型，`max` 是推理强度；本项目的桥接运行时会将这组配置传给 Codex CLI。这样做的目标是让用户可以对不同任务做有意识的模型路由，并据自己的任务、账号和运行环境测量成本、延迟与质量。它不承诺固定比例的省钱效果，也不保证所有 Codex 运行环境都开放该模型。
+The Codex main agent usually owns requirement analysis, technical decisions, and final integration. Subtasks such as code review, test execution, research, and focused repository searches have clearer boundaries, so users may prefer a model configuration suited to frequent delegated work instead of inheriting the main agent's configuration for every task.
 
-可以把任务流理解为：
+This project separates two concepts in model routing: `gpt-5.6-luna` is the model, while `max` is the reasoning effort. The default path configures both through Codex native `[agents]` settings. The external bridge passes the same configuration to the Codex CLI only when the user explicitly opts into cross-session capabilities. Users should measure cost, latency, and quality in their own tasks, accounts, and environments. This project does not promise a fixed cost reduction or guarantee model availability in every Codex environment.
+
+The task flow is:
 
 ```text
-主 Agent（负责规划、判断和整合）
-├─ 复杂或高风险任务 ───────────────→ 主 Agent 使用的高能力模型
-└─ 高频、边界清晰的子任务 ─────────→ gpt-5.6-luna + max
-                                      └─ 可选：本地队列与跨会话恢复
+Main agent (planning, decisions, and integration)
+├─ Complex or high-risk tasks ─────────────→ Main agent's high-capability model
+└─ Frequent, well-bounded subtasks ────────→ gpt-5.6-luna + max
+                                             └─ Optional local queue and cross-session recovery
 ```
 
-## 选择哪条路径
+## Choose a Path
 
-| 需求 | 推荐路径 |
+| Requirement | Recommended path |
 | --- | --- |
-| 普通拆解、代码审查、测试或资料整理 | Codex 原生子 Agent + 本项目提供的 Skill |
-| 希望显式指定 `gpt-5.6-luna` 和 `max` | 外部桥接器（在运行环境允许时） |
-| 需要跨 Codex 会话保存、恢复或接管任务 | 外部桥接器 |
-| 只需要当前会话内的并发协作 | 优先使用 Codex 原生子 Agent |
+| Routine decomposition, code review, testing, or research | Codex native subagents + this project's Skill |
+| Route work to `gpt-5.6-luna` with `max` reasoning | Codex native subagents + `[agents]` configuration |
+| Persist, recover, or adopt tasks across Codex sessions | External bridge |
+| Concurrent work contained in the current session | Prefer Codex native subagents |
 
-原生子 Agent 由 Codex 运行环境负责调度，通常是最轻量的路径。外部桥接器是可选兼容层，不是 Codex 官方原生功能；它不能把原生子 Agent 的内部通道、侧边栏展示或生命周期承诺扩展到所有环境。
+Codex manages native subagent scheduling, making it the lightest path in most cases. The external bridge is an optional compatibility layer, not an official Codex native feature. It cannot extend native internal channels, sidebar integration, or lifecycle guarantees to every environment.
 
-## 推荐路径：原生 Skill
+## Recommended: Native Skill
 
-这是普通任务拆解的默认入口。Skill 只提供拆解、并发、文件归属、消息交接和验证规则，不启动 Broker、不修改 PATH、不保存凭据，也不承诺跨会话持久化。
+This is the default entry point for routine task decomposition. The Skill defines decomposition, concurrency, file ownership, messaging, and verification rules. It does not start a broker, modify `PATH`, store credentials, or claim cross-session persistence.
 
-将 Skill 复制到用户级 Skill 目录（Windows PowerShell）：
+Each formal release includes `native-luna-subagents-skill-<version>.zip`. Extract it and place the included `native-luna-subagents` directory in your user-level Skill directory. You can also install it directly from a source checkout.
+
+Windows PowerShell:
 
 ```powershell
 $skillRoot = if ($env:CODEX_HOME) { Join-Path $env:CODEX_HOME 'skills' } else { Join-Path $env:USERPROFILE '.codex\skills' }
 Copy-Item -Recurse -Force '.\packages\native-luna-subagents' (Join-Path $skillRoot 'native-luna-subagents')
 ```
 
-若运行环境支持用户级 Agent 配置，可以将模型和推理强度设为：
+macOS:
+
+```bash
+skill_root="${CODEX_HOME:-$HOME/.codex}/skills"
+mkdir -p "$skill_root"
+cp -R ./packages/native-luna-subagents "$skill_root/native-luna-subagents"
+```
+
+When user-level agent configuration is supported, set the model and reasoning effort as follows:
 
 ```toml
 [agents]
@@ -49,22 +61,38 @@ default_subagent_model = "gpt-5.6-luna"
 default_subagent_reasoning_effort = "max"
 ```
 
-模型是否可用、子 Agent 是否显示在侧边栏，以及会话关闭后的生命周期，仍由 Codex 运行环境决定；本项目不把它们包装成持久化保证。
+After installing the Skill, saving the configuration, and reopening Codex, routine subtasks that need delegation use Codex native subagents by default. The external bridge is enabled only when the user explicitly requests cross-session persistence, recovery, or task adoption.
 
-## 可选路径：外部桥接器
+Model availability, native subagent visibility in the sidebar, and lifecycle behavior after a session closes remain controlled by the Codex environment. This project does not present them as persistence guarantees.
 
-只有在用户明确要求跨 Codex 会话保存、恢复或接管任务，或需要在本地运行时强制路由到 `gpt-5.6-luna` + `max` 时，才考虑安装外部桥接器。它要求 Windows 和 Python 3.12 或更高版本：
+## Optional: External Bridge
 
-发布版本可直接从 PyPI 安装：
+Install the external bridge only when tasks must be persisted, recovered, or adopted across Codex sessions. Selecting `gpt-5.6-luna` with `max` reasoning is not, by itself, a reason to install the bridge. The bridge supports Windows, macOS, and Python 3.12 or later.
+
+Install a published version from PyPI:
 
 ```powershell
 python -m pip install luna-agent-bridge
 luna-agent install
 ```
 
-也可以从 [GitHub Releases](https://github.com/ZaviWayne/luna-agent-bridge/releases/latest) 下载 Windows 单文件 `luna-agent.exe`，无需配置 Python。下载后可用 `.\luna-agent.exe --help` 查看命令；首次使用外部桥接器前运行 `.\luna-agent.exe install`。
+Alternatively, download the standalone Windows `luna-agent.exe` from [GitHub Releases](https://github.com/ZaviWayne/luna-agent-bridge/releases/latest). It does not require Python. Run `.\luna-agent.exe --help` to inspect the CLI, then run `.\luna-agent.exe install` before using the external bridge for the first time.
 
-如果需要从源码开发或测试，再使用下面的可编辑安装方式：
+On macOS, download the binary matching your architecture: `luna-agent-macos-arm64` or `luna-agent-macos-x86_64`.
+
+```bash
+chmod +x ./luna-agent-macos-arm64
+./luna-agent-macos-arm64 --help
+./luna-agent-macos-arm64 install
+```
+
+The installer copies the executable to `~/Library/Application Support/CodexLunaAgent/bin/luna-agent` and adds a managed `PATH` block to `~/.zprofile`. Open a new terminal to use `luna-agent`, or run `source ~/.zprofile` in the current terminal.
+
+The automated macOS build uses ad-hoc signing and is not yet notarized with an Apple Developer ID. Verify the SHA-256 checksum in the release. If Gatekeeper blocks a browser-downloaded binary, the user must explicitly allow it in macOS Privacy & Security settings; this project does not bypass platform security controls.
+
+For source development or testing, use an editable installation.
+
+Windows PowerShell:
 
 ```powershell
 python -m venv .venv
@@ -73,108 +101,119 @@ python -m pip install -e ".[dev]"
 luna-agent install
 ```
 
-激活成功后，当前 PowerShell 提示符会带有 `(.venv)`，后续可以直接使用 `luna-agent`。如果不希望激活虚拟环境，改用虚拟环境中的完整路径：
+After activation, PowerShell displays `(.venv)` in the prompt and `luna-agent` is available directly. Without activation, use the full virtual-environment path:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 .\.venv\Scripts\luna-agent.exe install
 ```
 
-如果 PowerShell 阻止执行 `Activate.ps1`，可以在当前窗口临时放宽策略后重试，或直接使用上面的完整路径方式：
+If PowerShell blocks `Activate.ps1`, temporarily relax the policy for the current process or use the full-path commands above:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
-常用命令：
+macOS:
 
-以下命令假设虚拟环境已经激活；未激活时，请将命令前缀替换为 `.\.venv\Scripts\luna-agent.exe`。
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
+luna-agent install
+```
 
-```powershell
-luna-agent spawn --name reviewer --cwd <workspace-path> --task "检查当前修改"
+Common commands are shown below. They assume the virtual environment is active or the installation directory is already in `PATH`. On Windows without activation, replace `luna-agent` with `.\.venv\Scripts\luna-agent.exe`.
+
+```console
+luna-agent spawn --name reviewer --cwd <workspace-path> --task "Review the current changes"
 luna-agent status <agent-id>
-luna-agent send <agent-id> "补充检查边界条件"
+luna-agent send <agent-id> "Check the boundary conditions"
 luna-agent wait <agent-id> --timeout 300
 luna-agent result <agent-id>
 luna-agent interrupt <agent-id>
 luna-agent archive <agent-id>
 ```
 
-桥接器通过本地 Codex CLI 启动任务，并传递：
+The bridge starts tasks through the local Codex CLI and passes:
 
 ```text
 --model gpt-5.6-luna
 --config model_reasoning_effort="max"
 ```
 
-本地状态默认保存到 `%LOCALAPPDATA%\CodexLunaAgent`，包括任务元数据、事件和恢复所需的队列状态。运行中的消息会排队到当前轮次边界，不能像原生内部通道一样即时注入模型生成过程。
+Local state is stored under `%LOCALAPPDATA%\CodexLunaAgent` on Windows and `~/Library/Application Support/CodexLunaAgent` on macOS. It includes task metadata, events, queued messages, and recovery state. Messages sent while an agent is running are queued until a turn boundary; the bridge cannot inject them into an active model generation like a native internal channel.
 
-用户准备关闭 Codex 时，必须先中断仍在运行的外部 Agent，再执行：
+Before closing Codex, interrupt all running external agents and shut down the broker:
 
-```powershell
+```console
 luna-agent broker shutdown
 ```
 
-不要假设关闭 Codex 会自动回收外部 Broker。普通卸载保留数据库；只有用户明确确认后才执行：
+Do not assume that closing Codex reclaims the external broker. A normal uninstall preserves the database. Purge data only after explicit user confirmation:
 
-```powershell
+```console
 luna-agent uninstall --purge-data --yes
 ```
 
-## 能力边界
+## Capability Boundaries
 
-桥接器提供：
+The bridge provides:
 
-- 面向本地 Codex CLI 的显式模型与推理强度路由。
-- SQLite 状态存储、任务事件、消息队列和恢复入口。
-- 在工作区切换或重新打开 Codex 后，通过任务 ID 查询、发送、等待和接管。
-- 最多 4 个本地 Worker，并在 Broker 关闭时停止其管理的进程。
+- Explicit model and reasoning-effort routing through the local Codex CLI.
+- SQLite state storage, task events, message queues, and recovery entry points.
+- Task lookup, messaging, waiting, and adoption after switching workspaces or reopening Codex.
+- Up to four local workers, with managed processes stopped during broker shutdown.
 
-桥接器不提供：
+The bridge does not provide:
 
-- Codex 官方原生子 Agent、官方侧边栏展示或官方生命周期保证。
-- 绕过账号权限、模型可用性、沙箱或批准策略的能力。
-- 固定的成本节省比例、固定延迟或跨账号的模型可用性承诺。
-- 远程 TCP 控制；状态和控制面默认只在本机 Named Pipe 上工作。
+- Official Codex native subagents, official sidebar integration, or official lifecycle guarantees.
+- A way to bypass account permissions, model availability, sandboxing, or approval policies.
+- Fixed cost savings, fixed latency, or model availability across accounts.
+- Remote TCP control. State and control use a local Windows Named Pipe or macOS Unix Domain Socket only.
 
-## 插件入口
+## Plugin Entry Point
 
-`plugins/luna-agent-bridge` 包含 `.codex-plugin/plugin.json` 和一个明确标注为“可选兼容层”的 Skill。它不会自动安装可执行文件、修改全局配置或添加个人 Marketplace 条目；请通过 Codex 的本地插件安装流程显式添加。
+`plugins/luna-agent-bridge` contains `.codex-plugin/plugin.json` and a Skill explicitly described as an optional compatibility layer. It does not automatically install executables, modify global configuration, or add a personal Marketplace entry. Add it explicitly through the Codex local plugin installation flow.
 
-## 安全边界
+## Security Boundaries
 
-- 不开放 TCP 远程控制。
-- 不读取或保存 Codex 凭据。
-- 不提供完全绕过沙箱的模式。
-- Named Pipe、自动批准、用户数据目录和进程生命周期都属于外部桥接器的安全审查范围。
-- 不要把外部桥接器或其跨会话恢复能力描述为 Codex 官方原生 Luna。
+- No remote TCP control.
+- No reading or storage of Codex credentials.
+- No full sandbox bypass mode.
+- Named Pipe, Unix Domain Socket, automatic approval, user data directories, and process lifecycle remain part of the external bridge's security review surface.
+- Never describe the external bridge or its cross-session recovery as official native Codex Luna behavior.
 
-## 开发与测试
+## Development and Testing
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -q
 ```
 
-`tests/fixtures` 中的 JSONL 文件是确定性的 Codex CLI 响应样本，用于在不访问网络、不消耗模型调用额度的情况下覆盖解析、事件和恢复逻辑；它们是测试输入，不会被打包到运行时。
-
-## 自动发布 GitHub Release 和 PyPI
-
-仓库包含 Tag 触发的 `.github/workflows/release.yml`。首次使用前，在 PyPI 的 Trusted Publishers 设置中登记：
-
-- Owner：`ZaviWayne`
-- Repository：`luna-agent-bridge`
-- Workflow：`.github/workflows/release.yml`
-- GitHub Environment：`pypi`
-
-之后，更新 `pyproject.toml` 版本并提交，再推送同版本 Tag：
-
-```powershell
-git tag v0.1.2
-git push origin v0.1.2
+```bash
+.venv/bin/python -m unittest discover -s tests -q
 ```
 
-Workflow 会从这个 Tag 构建 Windows EXE、wheel、sdist、插件包、Skill 包和校验文件，先创建 GitHub Release 草稿，再发布到 PyPI，最后公开 GitHub Release。Tag 与 `pyproject.toml` 版本不一致时会在发布前失败。不要移动已经公开的 Tag。
+The JSONL files in `tests/fixtures` are deterministic Codex CLI response samples. They cover parsing, events, and recovery without network access or model usage and are not packaged at runtime.
 
-发布前请移除 `.venv`、`build`、`dist`、`outputs`、`__pycache__` 和运行日志。Skill 与插件清单应通过对应的官方校验脚本。
+## Automated GitHub Release and PyPI Publishing
 
-项目采用 MIT License，详见 [LICENSE](LICENSE)。
+The tag-triggered workflow is defined in `.github/workflows/release.yml`. Before the first release, configure a PyPI Trusted Publisher with:
+
+- Owner: `ZaviWayne`
+- Repository: `luna-agent-bridge`
+- Workflow: `.github/workflows/release.yml`
+- GitHub Environment: `pypi`
+
+Update and commit the version in `pyproject.toml`, then push a matching tag:
+
+```powershell
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The workflow builds a Windows EXE, macOS arm64 and x86_64 standalone binaries, wheel, sdist, optional bridge plugin archive, bridge Skill archive, native Skill archive, and checksums from the tagged commit. It creates a draft GitHub Release, publishes to PyPI, and then publishes the GitHub Release. A tag that does not match the `pyproject.toml` version fails before publishing. Never move a published tag.
+
+Before release, remove `.venv`, `.venv-macos`, `build`, `dist`, `outputs`, `__pycache__`, and runtime logs. Validate Skills and plugin manifests with their corresponding official validators.
+
+This project is licensed under the [MIT License](LICENSE).

@@ -117,6 +117,7 @@ $pluginDir = Join-Path $projectRoot "plugins\luna-agent-bridge"
 $pluginManifestPath = Join-Path $pluginDir ".codex-plugin\plugin.json"
 $skillRoot = Join-Path $pluginDir "skills"
 $skillDir = Join-Path $skillRoot "luna-agent-bridge"
+$nativeSkillDir = Join-Path $projectRoot "packages\native-luna-subagents"
 if (-not (Test-Path -LiteralPath $pluginManifestPath -PathType Leaf)) {
     throw "缺少插件清单：$pluginManifestPath"
 }
@@ -125,6 +126,12 @@ if (-not (Test-Path -LiteralPath (Join-Path $skillDir "SKILL.md") -PathType Leaf
 }
 if (-not (Test-Path -LiteralPath (Join-Path $skillDir "agents\openai.yaml") -PathType Leaf)) {
     throw "缺少插件 Agent 元数据：$skillDir\agents\openai.yaml"
+}
+if (-not (Test-Path -LiteralPath (Join-Path $nativeSkillDir "SKILL.md") -PathType Leaf)) {
+    throw "缺少原生 Skill：$nativeSkillDir\SKILL.md"
+}
+if (-not (Test-Path -LiteralPath (Join-Path $nativeSkillDir "agents\openai.yaml") -PathType Leaf)) {
+    throw "缺少原生 Agent 元数据：$nativeSkillDir\agents\openai.yaml"
 }
 $pluginManifest = Get-Content -Raw -LiteralPath $pluginManifestPath | ConvertFrom-Json
 if ($pluginManifest.name -ne "luna-agent-bridge" -or $pluginManifest.version -ne $Version) {
@@ -136,27 +143,46 @@ if ($pluginManifest.skills -ne "./skills/") {
 
 $pluginZip = Join-Path $releaseDir "luna-agent-bridge-plugin-$Version.zip"
 $skillZip = Join-Path $releaseDir "luna-agent-bridge-skill-$Version.zip"
+$nativeSkillZip = Join-Path $releaseDir "native-luna-subagents-skill-$Version.zip"
 $archiveScript = @'
 import sys
 import zipfile
 from pathlib import Path
 
 
-def archive(source_root: Path, destination: Path) -> None:
+def archive(source_root: Path, destination: Path, root_name: str = "") -> None:
     with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as archive_file:
         for path in sorted(source_root.rglob("*")):
             if path.is_file():
-                archive_file.write(path, path.relative_to(source_root).as_posix())
+                relative = path.relative_to(source_root)
+                if root_name:
+                    relative = Path(root_name) / relative
+                archive_file.write(path, relative.as_posix())
 
 
 archive(Path(sys.argv[1]), Path(sys.argv[2]))
 archive(Path(sys.argv[3]), Path(sys.argv[4]))
+archive(Path(sys.argv[5]), Path(sys.argv[6]), Path(sys.argv[5]).name)
 '@
-Invoke-Python @("-c", $archiveScript, $pluginDir, $pluginZip, $skillRoot, $skillZip)
+Invoke-Python @(
+    "-c",
+    $archiveScript,
+    $pluginDir,
+    $pluginZip,
+    $skillRoot,
+    $skillZip,
+    $nativeSkillDir,
+    $nativeSkillZip
+)
 
 $validatorPath = Join-Path $env:USERPROFILE ".codex\skills\.system\plugin-creator\scripts\validate_plugin.py"
 if (Test-Path -LiteralPath $validatorPath -PathType Leaf) {
     Invoke-Python @($validatorPath, $pluginDir)
+}
+$skillValidatorPath = Join-Path $env:USERPROFILE ".codex\skills\.system\skill-creator\scripts\quick_validate.py"
+if (Test-Path -LiteralPath $skillValidatorPath -PathType Leaf) {
+    Invoke-Python @($skillValidatorPath, $skillDir)
+    Invoke-Python @($skillValidatorPath, $nativeSkillDir)
 }
 
 $wheelFiles = @(Get-ChildItem -LiteralPath $releaseDir -Filter "luna_agent_bridge-$Version-*.whl" -File)
@@ -172,7 +198,8 @@ $releaseFiles = @(
     $wheelFiles[0].FullName,
     $sdistFiles[0].FullName,
     $pluginZip,
-    $skillZip
+    $skillZip,
+    $nativeSkillZip
 )
 $checksumPath = Join-Path $releaseDir "SHA256SUMS.txt"
 $checksumLines = foreach ($releaseFile in ($releaseFiles | Sort-Object)) {

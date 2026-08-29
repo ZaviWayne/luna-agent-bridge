@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
-from multiprocessing.connection import Listener
+from multiprocessing import AuthenticationError
+from multiprocessing.connection import Client, Listener
+import os
 from pathlib import Path
 import threading
 import traceback
@@ -29,7 +31,16 @@ class PipeServer:
         """启动并持续接受客户端。"""
         self.paths.ensure_directories()
         authkey = load_or_create_authkey(self.paths)
-        self._listener = Listener(self.paths.pipe_name, family="AF_PIPE", authkey=authkey)
+        self._prepare_endpoint(authkey)
+        if self.paths.pipe_family == "AF_UNIX":
+            previous_umask = os.umask(0o077)
+            try:
+                self._listener = Listener(self.paths.pipe_name, family=self.paths.pipe_family, authkey=authkey)
+            finally:
+                os.umask(previous_umask)
+            Path(self.paths.pipe_name).chmod(0o600)
+        else:
+            self._listener = Listener(self.paths.pipe_name, family=self.paths.pipe_family, authkey=authkey)
         try:
             self.paths.pipe_lock.unlink()
         except FileNotFoundError:
@@ -38,7 +49,7 @@ class PipeServer:
             while not self._stop_event.is_set():
                 try:
                     connection = self._listener.accept()
-                except (OSError, EOFError):
+                except (OSError, EOFError, AuthenticationError):
                     if self._stop_event.is_set():
                         break
                     continue
@@ -46,6 +57,7 @@ class PipeServer:
         finally:
             self._listener.close()
             self._listener = None
+            self._remove_unix_socket()
 
     def stop(self) -> None:
         """停止服务端。"""
@@ -53,6 +65,28 @@ class PipeServer:
         listener = self._listener
         if listener is not None:
             listener.close()
+
+    def _prepare_endpoint(self, authkey: bytes) -> None:
+        """在 macOS 上拒绝覆盖活动 Socket，并清理崩溃遗留文件。"""
+        if self.paths.pipe_family != "AF_UNIX":
+            return
+        socket_path = Path(self.paths.pipe_name)
+        if not socket_path.exists():
+            return
+        try:
+            connection = Client(self.paths.pipe_name, family=self.paths.pipe_family, authkey=authkey)
+        except AuthenticationError as error:
+            raise RuntimeError("已有无法认证的 Luna Broker 正在使用本地 Socket") from error
+        except (ConnectionRefusedError, FileNotFoundError, OSError, EOFError):
+            socket_path.unlink(missing_ok=True)
+            return
+        connection.close()
+        raise RuntimeError("Luna Broker 已在运行")
+
+    def _remove_unix_socket(self) -> None:
+        """移除 macOS Unix Domain Socket 文件。"""
+        if self.paths.pipe_family == "AF_UNIX":
+            Path(self.paths.pipe_name).unlink(missing_ok=True)
 
     def _handle_connection(self, connection) -> None:
         try:

@@ -26,6 +26,10 @@ class ProtocolPipeTests(unittest.TestCase):
         request = BrokerRequest(version=1, request_id="r1", command="status", params={"agent": "a1"}, cwd=r"D:\p")
         self.assertEqual(request, decode_request(encode_request(request)))
 
+    def test_posix_request_round_trip_uses_json_bytes(self):
+        request = BrokerRequest(version=1, request_id="r2", command="status", params={"agent": "a1"}, cwd="/tmp/project")
+        self.assertEqual(request, decode_request(encode_request(request)))
+
     def test_unknown_command_is_rejected(self):
         with self.assertRaises(ProtocolError):
             decode_request(b'{"version":1,"request_id":"r1","command":"delete","params":{},"cwd":"D:\\\\p"}')
@@ -33,7 +37,11 @@ class ProtocolPipeTests(unittest.TestCase):
     def test_named_pipe_health_and_parallel_clients(self):
         with tempfile.TemporaryDirectory() as directory:
             base = AppPaths.for_user(Path(directory) / "app")
-            paths = replace(base, pipe_name=rf"\\.\pipe\codex-luna-test-{uuid4().hex}")
+            if base.pipe_family == "AF_PIPE":
+                pipe_name = rf"\\.\pipe\codex-luna-test-{uuid4().hex}"
+            else:
+                pipe_name = f"/private/tmp/codex-luna-test-{uuid4().hex}.sock"
+            paths = replace(base, pipe_name=pipe_name)
             server = PipeServer(paths, _FakeService())
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
@@ -61,6 +69,9 @@ class ProtocolPipeTests(unittest.TestCase):
             self.assertTrue(all(response == {"status": "ok"} for response in responses))
             server.stop()
             thread.join(timeout=3)
+            self.assertFalse(thread.is_alive())
+            if paths.pipe_family == "AF_UNIX":
+                self.assertFalse(Path(paths.pipe_name).exists())
 
 
 @dataclass

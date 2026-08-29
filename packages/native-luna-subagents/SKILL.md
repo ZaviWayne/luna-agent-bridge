@@ -1,11 +1,11 @@
 ---
 name: native-luna-subagents
-description: Use Codex native subagents to split and coordinate independent development, review, testing, or research tasks. Apply when the configured gpt-5.6-luna/max subagents are wanted without an external broker, background daemon, or cross-session persistence.
+description: Default to Codex native subagents for independent development, review, testing, or research tasks, including configured gpt-5.6-luna/max routing. Use the external bridge only for explicitly requested cross-session persistence, recovery, or adoption.
 ---
 
 # Native Luna Subagents
 
-Use Codex native subagents for parallel work. This skill only defines decomposition and handoff rules; it does not start an external CLI, create a broker, modify PATH, or present cross-session persistence as a native guarantee.
+Use Codex native subagents as the default for work contained in the current session, including tasks routed to `gpt-5.6-luna` with `max` reasoning. This skill only defines decomposition and handoff rules; it does not start an external CLI, create a broker, modify PATH, or present cross-session persistence as a native guarantee.
 
 ## Decompose the work
 

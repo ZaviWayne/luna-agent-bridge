@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build release artifacts
+  build-windows:
+    name: Build Windows artifacts
     runs-on: windows-latest
     steps:
       - name: Check out the tagged commit
@@ -35,13 +35,48 @@ jobs:
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ github.ref_name }}
+          name: release-windows-${{ github.ref_name }}
           path: outputs/release/${{ github.ref_name }}/
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macOS ${{ matrix.architecture }} artifact
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            architecture: arm64
+          - runner: macos-15-intel
+            architecture: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build and validate macOS release
+        shell: bash
+        run: ./scripts/package-macos.sh "${GITHUB_REF_NAME#v}" "${{ matrix.architecture }}"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos-${{ matrix.architecture }}-${{ github.ref_name }}
+          path: outputs/release/${{ github.ref_name }}/luna-agent-macos-${{ matrix.architecture }}
           if-no-files-found: error
 
   publish:
     name: Publish GitHub Release and PyPI package
-    needs: build
+    needs:
+      - build-windows
+      - build-macos
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -53,7 +88,14 @@ jobs:
       - name: Download release artifact
         uses: actions/download-artifact@v4
         with:
-          name: release-${{ github.ref_name }}
+          name: release-windows-${{ github.ref_name }}
+          path: release
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-macos-*-${{ github.ref_name }}
+          merge-multiple: true
           path: release
 
       - name: Check release files
@@ -61,11 +103,18 @@ jobs:
         run: |
           set -euo pipefail
           test -f release/luna-agent.exe
-          test -f release/SHA256SUMS.txt
+          test -f release/luna-agent-macos-arm64
+          test -f release/luna-agent-macos-x86_64
+          test "$(find release -maxdepth 1 -type f -name 'luna-agent-macos-*' | wc -l)" -eq 2
           test "$(find release -maxdepth 1 -name '*.whl' | wc -l)" -eq 1
           test "$(find release -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 1
           test -f "release/luna-agent-bridge-plugin-${GITHUB_REF_NAME#v}.zip"
           test -f "release/luna-agent-bridge-skill-${GITHUB_REF_NAME#v}.zip"
+          test -f "release/native-luna-subagents-skill-${GITHUB_REF_NAME#v}.zip"
+          find release -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%f\n' \
+            | sort \
+            | xargs -I{} sha256sum "release/{}" \
+            | sed 's#  release/#  #' > release/SHA256SUMS.txt
 
       - name: Create draft GitHub Release
         env:
@@ -84,10 +133,13 @@ jobs:
             --title "Luna Agent Bridge $GITHUB_REF_NAME" \
             --generate-notes \
             release/luna-agent.exe \
+            release/luna-agent-macos-arm64 \
+            release/luna-agent-macos-x86_64 \
             release/*.whl \
             release/*.tar.gz \
             release/luna-agent-bridge-plugin-*.zip \
             release/luna-agent-bridge-skill-*.zip \
+            release/native-luna-subagents-skill-*.zip \
             release/SHA256SUMS.txt
 
       - name: Prepare Python distributions

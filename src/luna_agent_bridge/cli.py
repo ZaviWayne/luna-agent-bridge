@@ -243,13 +243,13 @@ def _start_broker(paths) -> None:
     if not _acquire_startup_lock(paths):
         return
     try:
-        executable = paths.bin_dir / "luna-agent.exe"
+        executable = paths.bin_dir / paths.executable_name
         if executable.exists():
-            argv = [str(executable), "broker", "serve"]
+            argv = [str(executable), "--app-root", str(paths.root), "broker", "serve"]
         else:
             argv = [sys.executable, "-m", "luna_agent_bridge", "--app-root", str(paths.root), "broker", "serve"]
         log_path = paths.logs_dir / "broker-launch.log"
-        if os.name == "nt":
+        if paths.pipe_family == "AF_PIPE":
             process = _start_broker_via_powershell(argv, log_path)
         else:
             log_handle = log_path.open("a", encoding="utf-8")
@@ -260,6 +260,8 @@ def _start_broker(paths) -> None:
                     stdout=log_handle,
                     stderr=log_handle,
                     close_fds=True,
+                    start_new_session=True,
+                    env=_detached_broker_environment(),
                 )
             finally:
                 log_handle.close()
@@ -308,6 +310,14 @@ def _normalized_windows_environment() -> dict[str, str]:
         if lower_key not in normalized:
             normalized[lower_key] = value
     return {key.upper() if key == "path" else key.upper() if key in {"temp", "tmp"} else key: value for key, value in normalized.items()}
+
+
+def _detached_broker_environment() -> dict[str, str]:
+    """为独立 Broker 清理 PyInstaller 父进程状态。"""
+    environment = dict(os.environ)
+    if getattr(sys, "frozen", False):
+        environment["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    return environment
 
 
 def _powershell_quote(value: str) -> str:

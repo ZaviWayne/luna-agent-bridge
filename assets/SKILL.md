@@ -14,7 +14,7 @@ description: 已弃用的外部桥接 Skill，仅供用户明确安装旧版 lun
 
 常用命令：
 
-```powershell
+```console
 luna-agent spawn --name reviewer --cwd <workspace-path> --task "检查当前修改"
 luna-agent send reviewer "重点检查事务边界"
 luna-agent status reviewer

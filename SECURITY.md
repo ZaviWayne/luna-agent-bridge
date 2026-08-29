@@ -1,19 +1,22 @@
-# 安全策略
+# Security Policy
 
-## 范围
+English | [中文](SECURITY_CN.md)
 
-原生 Skill 不执行外部进程，也不提供持久化服务。安全风险主要位于可选的 `luna-agent-bridge` 外部桥接器：它会启动本地 Codex CLI 子进程、使用 Windows Named Pipe，并将 Agent、消息、轮次和恢复状态写入用户数据目录。
+## Scope
 
-## 当前边界
+The native Skill does not execute external processes or provide a persistence service. The main security surface is the optional `luna-agent-bridge` external bridge. It starts local Codex CLI subprocesses, uses a Windows Named Pipe or macOS Unix Domain Socket, and writes agents, messages, turns, and recovery state to the user data directory.
 
-- 不开放 TCP 监听或远程控制端口。
-- 不读取或保存 Codex 凭据。
-- 桥接器默认使用 `workspace-write` 和 Codex CLI 的显式批准参数，不提供完全绕过沙箱的模式。
-- `--purge-data --yes` 是显式的数据删除操作，普通卸载不应删除任务数据库。
-- 用户关闭 Codex 前必须显式中断外部 Agent 并关闭 Broker；不能把外部桥接器当作原生生命周期管理。
+## Current Boundaries
 
-## 报告漏洞
+- No TCP listener or remote control port is exposed.
+- Codex credentials are neither read nor stored.
+- The macOS socket and authentication key are accessible only to the current user, and the broker does not listen on TCP.
+- The bridge defaults to `workspace-write` and explicit Codex CLI approval parameters. It does not provide a full sandbox bypass mode.
+- `--purge-data --yes` is an explicit data deletion operation. A normal uninstall must preserve the task database.
+- Users must explicitly interrupt external agents and stop the broker before closing Codex. The external bridge must not be treated as native lifecycle management.
 
-请不要在公开 Issue 中发布凭据、Named Pipe 细节、可执行载荷或可复现的本地提权步骤。先通过仓库维护者提供的私有渠道报告，并附上受影响版本、Windows/Python 版本、复现步骤和最小化日志。
+## Reporting a Vulnerability
 
-在尚未配置专用安全邮箱前，维护者应在发布页提供私有报告渠道；安全修复发布前不公开利用细节。
+Do not publish credentials, local IPC details, executable payloads, or reproducible local privilege-escalation steps in a public issue. Report them through a private channel provided by the maintainers and include the affected version, operating system and Python version, reproduction steps, and minimal logs.
+
+Until a dedicated security email is configured, maintainers should provide a private reporting channel on the release page. Exploit details must remain private until a security fix is released.

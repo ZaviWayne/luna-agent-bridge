@@ -1,4 +1,4 @@
-"""受控 Codex 子进程和 Windows Job Object 生命周期。"""
+"""受控 Codex 子进程及其平台进程组生命周期。"""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from .codex_adapter import CodexInvocation
 
 if os.name == "nt":
     _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-else:  # pragma: no cover - Windows is the supported runtime
+else:
     _kernel32 = None
 
 
@@ -103,9 +103,10 @@ class _WindowsJob:
 class RunningProcess:
     """已启动的受控进程。"""
 
-    def __init__(self, process: subprocess.Popen[bytes], job: _WindowsJob):
+    def __init__(self, process: subprocess.Popen[bytes], job: _WindowsJob, owns_process_group: bool):
         self.process = process
         self.job = job
+        self.owns_process_group = owns_process_group
 
     @property
     def pid(self) -> int:
@@ -141,13 +142,16 @@ class RunningProcess:
                 self.process.send_signal(signal.CTRL_BREAK_EVENT)
             except (AttributeError, OSError):
                 self.process.terminate()
-        else:  # pragma: no cover - supported deployment is Windows
-            self.process.terminate()
+        else:
+            self._signal_process_group(signal.SIGTERM)
         deadline = time.monotonic() + grace_seconds
         while self.process.poll() is None and time.monotonic() < deadline:
             time.sleep(0.05)
         if self.process.poll() is None:
-            self.job.terminate(130)
+            if os.name == "nt":
+                self.job.terminate(130)
+            else:
+                self._signal_process_group(signal.SIGKILL)
             try:
                 self.process.wait(timeout=1)
             except subprocess.TimeoutExpired:
@@ -155,6 +159,16 @@ class RunningProcess:
                 self.process.wait(timeout=1)
         self._close_pipes()
         self.job.close()
+
+    def _signal_process_group(self, signal_number: int) -> None:
+        """向当前 Agent 独占的 POSIX 进程组发送信号。"""
+        try:
+            if self.owns_process_group:
+                os.killpg(self.process.pid, signal_number)
+            else:
+                self.process.send_signal(signal_number)
+        except ProcessLookupError:
+            return
 
 
 class ProcessController:
@@ -178,8 +192,9 @@ class ProcessController:
             stderr=subprocess.PIPE,
             creationflags=creationflags,
             startupinfo=startupinfo,
+            start_new_session=os.name != "nt",
         )
         job = _WindowsJob()
         if job.handle is not None:
             job.assign(process._handle)
-        return RunningProcess(process, job)
+        return RunningProcess(process, job, owns_process_group=os.name != "nt")

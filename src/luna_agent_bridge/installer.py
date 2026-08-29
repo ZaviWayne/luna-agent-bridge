@@ -7,8 +7,10 @@ from datetime import datetime, timezone
 import ctypes
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 from typing import Callable
 
@@ -18,6 +20,8 @@ from .paths import AppPaths, ConfigurationError
 BEGIN_MARKER = "<!-- BEGIN CODEX LUNA AGENT BRIDGE -->"
 END_MARKER = "<!-- END CODEX LUNA AGENT BRIDGE -->"
 PATH_SEPARATOR = ";"
+SHELL_PATH_BEGIN = "# BEGIN CODEX LUNA AGENT BRIDGE PATH"
+SHELL_PATH_END = "# END CODEX LUNA AGENT BRIDGE PATH"
 
 
 class UserPathStore:
@@ -56,23 +60,32 @@ class Installer:
         home: Path | None = None,
         path_store: UserPathStore | None = None,
         acl_runner: Callable[[Path], None] | None = None,
+        platform_name: str | None = None,
     ):
         self.paths = paths
         self.home = Path(home or Path.home()).expanduser().resolve()
         self.path_store = path_store or UserPathStore()
         self.acl_runner = acl_runner or _apply_current_user_acl
+        self.platform_name = platform_name or (
+            "windows" if os.name == "nt" else "macos" if sys.platform == "darwin" else "unsupported"
+        )
         self.agents_file = self.home / "AGENTS.md"
         self.skill_dir = self.home / ".codex" / "skills" / "luna-agent-bridge"
+        self.shell_profile = self.home / ".zprofile"
 
     def install(self, source_exe: Path) -> dict[str, str]:
         """安装或升级可执行文件和全局规则。"""
+        if self.platform_name not in {"windows", "macos"}:
+            raise ConfigurationError("Luna Agent Bridge 仅支持 Windows 和 macOS")
         source_exe = Path(source_exe).expanduser().resolve()
         if not source_exe.is_file():
             raise ConfigurationError(f"安装源文件不存在：{source_exe}")
         self.paths.ensure_directories()
         backup_dir = self._backup_existing_files()
-        target_exe = self.paths.bin_dir / "luna-agent.exe"
+        target_exe = self.paths.bin_dir / self.paths.executable_name
         _copy_atomic(source_exe, target_exe)
+        if self.platform_name == "macos":
+            target_exe.chmod(0o700)
         skill_source = _asset_path("SKILL.md")
         self.skill_dir.mkdir(parents=True, exist_ok=True)
         _copy_atomic(skill_source, self.skill_dir / "SKILL.md")
@@ -83,7 +96,10 @@ class Installer:
                 self.paths.config,
                 "model = \"gpt-5.6-luna\"\nmodel_reasoning_effort = \"max\"\nsandbox = \"workspace-write\"\napprove_for_me = true\nmax_workers = 4\n",
             )
-        self._add_path_entry(self.paths.bin_dir)
+        if self.platform_name == "windows":
+            self._add_path_entry(self.paths.bin_dir)
+        else:
+            self._write_shell_path_block()
         for directory in (self.paths.root, self.paths.bin_dir, self.paths.broker_dir, self.paths.data_dir, self.paths.logs_dir):
             self.acl_runner(directory)
         return {
@@ -91,19 +107,23 @@ class Installer:
             "database": str(self.paths.database),
             "skill": str(self.skill_dir / "SKILL.md"),
             "agents": str(self.agents_file),
+            "shell_profile": str(self.shell_profile) if self.platform_name == "macos" else "",
             "backup": str(backup_dir) if backup_dir else "",
         }
 
     def uninstall(self, purge_data: bool = False) -> dict[str, str | bool]:
         """卸载桥接器；默认保留 Agent 数据和日志。"""
-        target_exe = self.paths.bin_dir / "luna-agent.exe"
+        target_exe = self.paths.bin_dir / self.paths.executable_name
         if target_exe.exists():
             target_exe.unlink()
         if self.skill_dir.exists():
             shutil.rmtree(self.skill_dir)
         if self.agents_file.exists():
             self._remove_agents_block()
-        self._remove_path_entry(self.paths.bin_dir)
+        if self.platform_name == "windows":
+            self._remove_path_entry(self.paths.bin_dir)
+        else:
+            self._remove_shell_path_block()
         purged = False
         if purge_data:
             for target in (self.paths.data_dir, self.paths.logs_dir, self.paths.broker_dir):
@@ -118,6 +138,8 @@ class Installer:
         skill_file = self.skill_dir / "SKILL.md"
         if skill_file.exists():
             existing.append((skill_file, Path("skill") / "SKILL.md"))
+        if self.platform_name == "macos" and self.shell_profile.exists():
+            existing.append((self.shell_profile, Path(".zprofile")))
         if not existing:
             return None
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -165,6 +187,25 @@ class Installer:
         entries = [item for item in self.path_store.get().split(PATH_SEPARATOR) if item and item.casefold() != normalized]
         self.path_store.set(PATH_SEPARATOR.join(entries))
 
+    def _write_shell_path_block(self) -> None:
+        """将 macOS 可执行目录写入 zsh 登录环境。"""
+        existing = self.shell_profile.read_text(encoding="utf-8") if self.shell_profile.exists() else ""
+        export_line = f"export PATH={shlex.quote(str(self.paths.bin_dir))}:\"$PATH\""
+        block = f"{SHELL_PATH_BEGIN}\n{export_line}\n{SHELL_PATH_END}"
+        content = _replace_managed_block(existing, SHELL_PATH_BEGIN, SHELL_PATH_END, block)
+        _write_atomic(self.shell_profile, content)
+
+    def _remove_shell_path_block(self) -> None:
+        """从 macOS zsh 登录环境移除受管 PATH。"""
+        if not self.shell_profile.exists():
+            return
+        content = self.shell_profile.read_text(encoding="utf-8")
+        updated = _remove_managed_block(content, SHELL_PATH_BEGIN, SHELL_PATH_END)
+        if updated:
+            _write_atomic(self.shell_profile, updated)
+        else:
+            self.shell_profile.unlink()
+
     def _remove_owned_directory(self, target: Path) -> None:
         target = target.resolve()
         if target.parent != self.paths.root.resolve():
@@ -187,12 +228,42 @@ def _asset_path(name: str) -> Path:
 
 def _write_atomic(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="\n", dir=path.parent, delete=False) as handle:
-        temporary = Path(handle.name)
-        handle.write(content)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, path)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", newline="\n", dir=path.parent, delete=False
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None and temporary.exists():
+            temporary.unlink()
+
+
+def _replace_managed_block(existing: str, begin: str, end: str, block: str) -> str:
+    """替换或追加一个受管文本块。"""
+    start = existing.find(begin)
+    finish = existing.find(end)
+    if start >= 0 and finish >= start:
+        finish += len(end)
+        parts = [part for part in (existing[:start].strip(), block, existing[finish:].strip()) if part]
+        return "\n\n".join(parts) + "\n"
+    prefix = existing.rstrip()
+    return prefix + ("\n\n" if prefix else "") + block + "\n"
+
+
+def _remove_managed_block(existing: str, begin: str, end: str) -> str:
+    """移除一个受管文本块并保留其他内容。"""
+    start = existing.find(begin)
+    finish = existing.find(end)
+    if start < 0 or finish < start:
+        return existing
+    finish += len(end)
+    content = (existing[:start] + existing[finish:]).strip()
+    return content + "\n" if content else ""
 
 
 def _copy_atomic(source: Path, destination: Path) -> None:
@@ -208,8 +279,9 @@ def _copy_atomic(source: Path, destination: Path) -> None:
 
 
 def _apply_current_user_acl(path: Path) -> None:
-    """限制目录 ACL 为当前用户；非 Windows 开发环境跳过。"""
+    """限制应用目录仅供当前用户访问。"""
     if os.name != "nt":
+        path.chmod(0o700)
         return
     result = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"], capture_output=True, text=True, check=False)
     if result.returncode != 0:

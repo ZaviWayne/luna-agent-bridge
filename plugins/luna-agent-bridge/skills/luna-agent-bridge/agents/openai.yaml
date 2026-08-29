@@ -1,6 +1,6 @@
 interface:
   display_name: "Luna Agent Bridge"
-  short_description: "Opt-in Windows bridge for persistent tasks"
+  short_description: "Opt-in Windows and macOS bridge for persistent tasks"
   default_prompt: "Use $luna-agent-bridge only when I explicitly request the external persistent bridge."
 
 policy:

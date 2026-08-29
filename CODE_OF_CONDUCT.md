@@ -1,15 +1,17 @@
-# 行为准则
+# Code of Conduct
 
-## 我们的承诺
+English | [中文](CODE_OF_CONDUCT_CN.md)
 
-为了营造开放、友善和安全的协作环境，参与者应尊重不同经验、背景和观点，并以建设性方式讨论技术取舍。
+## Our Pledge
 
-## 不可接受的行为
+To maintain an open, welcoming, and safe collaborative environment, participants must respect different experiences, backgrounds, and perspectives and discuss technical tradeoffs constructively.
 
-- 人身攻击、骚扰、歧视、威胁或公开他人私人信息。
-- 发布凭据、恶意载荷或未经授权的第三方数据。
-- 在代码审查、Issue 或社区讨论中持续扰乱协作。
+## Unacceptable Behavior
 
-## 执行
+- Personal attacks, harassment, discrimination, threats, or disclosure of another person's private information.
+- Publishing credentials, malicious payloads, or unauthorized third-party data.
+- Repeatedly disrupting code reviews, issues, or community discussions.
 
-请通过仓库维护者提供的私有渠道报告问题。维护者可以删除不当内容、限制参与权限，或在必要时终止参与资格。所有处理都会尽量保密并保持一致性。
+## Enforcement
+
+Report incidents through a private channel provided by the repository maintainers. Maintainers may remove inappropriate content, restrict participation, or revoke participation when necessary. Reports and enforcement actions will be handled as consistently and confidentially as possible.

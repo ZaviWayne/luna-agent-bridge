@@ -1,22 +1,22 @@
 ---
 name: luna-agent-bridge
-description: Use the local Windows `luna-agent` bridge only when the user explicitly requests cross-session persistence, recovery, or adoption of an external task. Do not trigger for ordinary native subagent work or start a background broker without explicit opt-in.
+description: Use the local Windows or macOS `luna-agent` bridge only when the user explicitly requests cross-session persistence, recovery, or adoption of an external task. Do not trigger for ordinary native subagent work or start a background broker without explicit opt-in.
 ---
 
 # Luna Agent Bridge (optional compatibility layer)
 
-This is an unofficial Windows external bridge, not a Codex native Luna subagent. Prefer native subagents for ordinary parallel work. Use this skill only when the user explicitly requests cross-session persistence, recovery, or adoption.
+This is an unofficial Windows and macOS external bridge, not a Codex native Luna subagent. Prefer native subagents for ordinary parallel work. Use this skill only when the user explicitly requests cross-session persistence, recovery, or adoption.
 
 ## Before use
 
 1. Confirm that the user explicitly requested the external bridge and that `luna-agent` is already installed.
 2. Do not install executables, edit PATH, write global Codex configuration, or start a persistent broker automatically.
-3. Tell the user that the bridge stores agents, messages, turns, and recovery state under `%LOCALAPPDATA%\CodexLunaAgent`.
+3. Tell the user that the bridge stores agents, messages, turns, and recovery state under `%LOCALAPPDATA%\CodexLunaAgent` on Windows or `~/Library/Application Support/CodexLunaAgent` on macOS.
 4. Confirm that the task does not require the native Codex sidebar, native message channel, or an official persistence guarantee.
 
 ## Common commands
 
-```powershell
+```console
 luna-agent spawn --name reviewer --cwd <workspace-path> --task "Review the current changes"
 luna-agent status <agent-id>
 luna-agent send <agent-id> "Check boundary conditions"

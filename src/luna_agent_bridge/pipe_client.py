@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from multiprocessing.connection import Client
+import os
 from pathlib import Path
 import secrets
 import time
@@ -13,15 +14,36 @@ from .paths import AppPaths
 from .protocol import BrokerRequest, BrokerResponse, decode_response, encode_request
 
 
+AUTHKEY_BYTES = 32
+AUTHKEY_READ_ATTEMPTS = 100
+AUTHKEY_READ_DELAY_SECONDS = 0.01
+
+
 def load_or_create_authkey(paths: AppPaths) -> bytes:
     """读取或创建本机 Broker 认证密钥。"""
     paths.ensure_directories()
     if paths.broker_key.exists():
-        return paths.broker_key.read_bytes()
-    key = secrets.token_bytes(32)
-    with paths.broker_key.open("xb") as handle:
+        return _read_authkey(paths)
+    key = secrets.token_bytes(AUTHKEY_BYTES)
+    try:
+        descriptor = os.open(paths.broker_key, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        return _read_authkey(paths)
+    with os.fdopen(descriptor, "wb") as handle:
         handle.write(key)
+        handle.flush()
+        os.fsync(handle.fileno())
     return key
+
+
+def _read_authkey(paths: AppPaths) -> bytes:
+    """等待并读取并发创建中的完整认证密钥。"""
+    for _ in range(AUTHKEY_READ_ATTEMPTS):
+        key = paths.broker_key.read_bytes()
+        if len(key) == AUTHKEY_BYTES:
+            return key
+        time.sleep(AUTHKEY_READ_DELAY_SECONDS)
+    raise RuntimeError("Luna Broker 认证密钥不完整")
 
 
 class PipeClient:
@@ -55,7 +77,7 @@ class PipeClient:
         last_error: Exception | None = None
         while time.monotonic() < deadline:
             try:
-                return Client(self.paths.pipe_name, family="AF_PIPE", authkey=key)
+                return Client(self.paths.pipe_name, family=self.paths.pipe_family, authkey=key)
             except (OSError, EOFError, ConnectionRefusedError) as error:
                 last_error = error
                 if self.starter is not None and not started:

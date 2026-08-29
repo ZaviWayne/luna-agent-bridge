@@ -1,4 +1,4 @@
-name: Windows CI
+name: CI
 
 on:
   push:
@@ -12,9 +12,15 @@ permissions:
 
 jobs:
   tests:
-    name: Python 3.12 tests
-    runs-on: windows-latest
+    name: ${{ matrix.os }} / Python 3.12
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-14
     steps:
       - name: Check out source
         uses: actions/checkout@v6

@@ -39,11 +39,23 @@ class DomainTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "CodexLunaAgent"
             with patch("luna_agent_bridge.paths._effective_identity_suffix", return_value="sid-1001"):
-                first = AppPaths.for_user(root)
+                first = AppPaths.for_user(root, platform_name="windows")
             with patch("luna_agent_bridge.paths._effective_identity_suffix", return_value="sid-1003"):
-                second = AppPaths.for_user(root)
+                second = AppPaths.for_user(root, platform_name="windows")
             self.assertNotEqual(first.pipe_name, second.pipe_name)
             self.assertIn("sid-1001", first.pipe_name)
+
+    def test_macos_paths_use_application_support_and_unix_socket(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            with patch("luna_agent_bridge.paths.Path.home", return_value=home):
+                paths = AppPaths.for_user(platform_name="macos")
+            expected_root = (home / "Library" / "Application Support" / "CodexLunaAgent").resolve()
+            self.assertEqual(expected_root, paths.root)
+            self.assertEqual("AF_UNIX", paths.pipe_family)
+            self.assertEqual("luna-agent", paths.executable_name)
+            self.assertEqual(Path("/private/tmp"), Path(paths.pipe_name).parent)
+            self.assertTrue(Path(paths.pipe_name).name.startswith("codex-luna-agent-"))
 
 
 if __name__ == "__main__":

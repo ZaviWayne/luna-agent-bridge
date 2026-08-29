@@ -34,7 +34,7 @@ class CliTests(unittest.TestCase):
 
     def test_broker_startup_uses_hidden_proxy_and_keeps_lock_until_ready(self):
         with tempfile.TemporaryDirectory() as directory:
-            paths = AppPaths.for_user(Path(directory) / "app")
+            paths = AppPaths.for_user(Path(directory) / "app", platform_name="windows")
 
             with patch(
                 "luna_agent_bridge.cli.subprocess.Popen"
@@ -53,7 +53,7 @@ class CliTests(unittest.TestCase):
 
     def test_broker_proxy_does_not_redirect_child_stdio(self):
         with tempfile.TemporaryDirectory() as directory:
-            paths = AppPaths.for_user(Path(directory) / "app")
+            paths = AppPaths.for_user(Path(directory) / "app", platform_name="windows")
             with patch(
                 "luna_agent_bridge.cli.subprocess.run",
                 return_value=SimpleNamespace(returncode=0, stdout="1234\r\n", stderr=""),
@@ -65,14 +65,14 @@ class CliTests(unittest.TestCase):
 
     def test_broker_proxy_allows_empty_stdout_when_start_process_succeeds(self):
         with tempfile.TemporaryDirectory() as directory:
-            paths = AppPaths.for_user(Path(directory) / "app")
+            paths = AppPaths.for_user(Path(directory) / "app", platform_name="windows")
             with patch("luna_agent_bridge.cli.subprocess.run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")):
                 _start_broker(paths)
             self.assertTrue(paths.pipe_lock.exists())
 
     def test_source_broker_startup_passes_app_root_to_child(self):
         with tempfile.TemporaryDirectory() as directory:
-            paths = AppPaths.for_user(Path(directory) / "app")
+            paths = AppPaths.for_user(Path(directory) / "app", platform_name="windows")
             with patch("luna_agent_bridge.cli.subprocess.run", return_value=SimpleNamespace(returncode=0, stdout="1234\r\n", stderr="")) as run:
                 with patch("luna_agent_bridge.cli.Path.exists", return_value=False):
                     _start_broker(paths)
@@ -82,6 +82,21 @@ class CliTests(unittest.TestCase):
 
             script = base64.b64decode(encoded).decode("utf-16le")
             self.assertIn(str(paths.root), script)
+
+    def test_macos_broker_starts_in_detached_session(self):
+        with tempfile.TemporaryDirectory() as directory:
+            paths = AppPaths.for_user(Path(directory) / "app", platform_name="macos")
+            paths.ensure_directories()
+            (paths.bin_dir / paths.executable_name).write_bytes(b"binary")
+            process = SimpleNamespace(pid=1234)
+            with patch("luna_agent_bridge.cli.subprocess.Popen", return_value=process) as popen:
+                with patch.object(sys, "frozen", True, create=True):
+                    _start_broker(paths)
+            self.assertTrue(popen.call_args.kwargs["start_new_session"])
+            self.assertEqual("1", popen.call_args.kwargs["env"]["PYINSTALLER_RESET_ENVIRONMENT"])
+            self.assertEqual("1234", paths.pipe_lock.read_text(encoding="utf-8"))
+            self.assertIn("--app-root", popen.call_args.args[0])
+            self.assertIn(str(paths.root), popen.call_args.args[0])
 
     def test_spawn_defaults_to_current_directory(self):
         args = build_parser().parse_args(["spawn", "--name", "reviewer", "--task", "检查修改"])
