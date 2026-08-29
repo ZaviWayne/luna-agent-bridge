@@ -112,7 +112,7 @@ cleanup_smoke() {
     rm -rf "$smoke_root"
 }
 trap cleanup_smoke EXIT
-"$release_binary" --app-root "$smoke_root" broker serve >"$broker_log" 2>&1 &
+PATH="/usr/bin:/bin:/usr/sbin:/sbin" "$release_binary" --app-root "$smoke_root" broker serve >"$broker_log" 2>&1 &
 broker_pid=$!
 for _ in {1..100}; do
     if [[ -S $pipe_name ]]; then

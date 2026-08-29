@@ -56,8 +56,6 @@ class AgentService:
         self.settings = settings.validate()
         self._execute_override = execute_turn
         self.process_controller = process_controller or ProcessController()
-        if command_factory is None and execute_turn is None:
-            command_factory = CodexCommandFactory(self.settings.resolve_codex_executable(), self.settings)
         self.command_factory = command_factory
         self._lock = threading.RLock()
         self._condition = threading.Condition(self._lock)
@@ -328,12 +326,11 @@ class AgentService:
     def _execute_turn(self, agent: AgentRecord, message: MessageRecord, turn: TurnRecord) -> CodexTurnResult:
         if self._execute_override is not None:
             return self._execute_override(agent, message, turn)
-        if self.command_factory is None:
-            raise RuntimeError("Codex 命令工厂未初始化")
+        command_factory = self._resolve_command_factory()
         if agent.codex_thread_id:
-            invocation = self.command_factory.resume(agent.codex_thread_id, message.content, Path(agent.workspace))
+            invocation = command_factory.resume(agent.codex_thread_id, message.content, Path(agent.workspace))
         else:
-            invocation = self.command_factory.spawn(Path(agent.workspace), message.content)
+            invocation = command_factory.spawn(Path(agent.workspace), message.content)
         process = self.process_controller.start(invocation)
         with self._lock:
             self._running_handles[agent.id] = process
@@ -353,6 +350,13 @@ class AgentService:
             if error_text and result.error is None:
                 result = CodexTurnResult(result.thread_id, result.final_text, result.usage, result.events, error_text)
         return result
+
+    def _resolve_command_factory(self) -> CodexCommandFactory:
+        with self._lock:
+            if self.command_factory is None:
+                executable = self.settings.resolve_codex_executable()
+                self.command_factory = CodexCommandFactory(executable, self.settings)
+            return self.command_factory
 
     def _finish_failed(
         self,

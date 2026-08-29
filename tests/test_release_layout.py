@@ -205,6 +205,7 @@ class ReleaseLayoutTests(unittest.TestCase):
             "broker serve",
             "broker_pid",
             "pipe_name",
+            'PATH="/usr/bin:/bin:/usr/sbin:/sbin"',
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, macos_script)

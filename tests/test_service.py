@@ -4,6 +4,7 @@ import time
 import unittest
 from pathlib import Path
 import sys
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
@@ -83,6 +84,15 @@ class ServiceTests(unittest.TestCase):
         self.service.wait([first.id, second.id], timeout_seconds=3)
         self.assertEqual(first.id, self.service.status("reviewer", self.workspace, "session-a").id)
         self.assertEqual(second.id, self.service.status("reviewer", self.workspace, "session-b").id)
+
+    def test_codex_executable_is_resolved_only_when_agent_executes(self):
+        with patch.object(Settings, "resolve_codex_executable", return_value=Path("/tmp/codex")) as resolve:
+            service = AgentService(self.storage, self.scheduler, Settings.defaults())
+            resolve.assert_not_called()
+            first = service._resolve_command_factory()
+            second = service._resolve_command_factory()
+        self.assertIs(first, second)
+        resolve.assert_called_once_with()
 
 
 if __name__ == "__main__":
