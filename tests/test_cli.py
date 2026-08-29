@@ -1,7 +1,7 @@
 import io
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -107,6 +107,15 @@ class CliTests(unittest.TestCase):
         client = FakeClient()
         client.response = BrokerResponse.error("r1", "WAIT_TIMEOUT", "等待超时")
         self.assertEqual(5, main(["wait", "reviewer", "--timeout", "1"], client=client))
+
+    def test_broker_connection_error_maps_to_exit_code_three(self):
+        client = FakeClient()
+        stderr = io.StringIO()
+        with patch.object(client, "request", side_effect=ConnectionError("无法连接 Luna Broker")):
+            with redirect_stderr(stderr):
+                exit_code = main(["broker", "health", "--json"], client=client)
+        self.assertEqual(3, exit_code)
+        self.assertEqual("无法连接 Luna Broker\n", stderr.getvalue())
 
     def test_spawn_sends_expected_parameters(self):
         client = FakeClient()

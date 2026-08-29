@@ -91,11 +91,43 @@ fi
 smoke_root=$(mktemp -d "${TMPDIR:-/private/tmp}/luna-agent-bridge-smoke.XXXXXX")
 mkdir -p "$smoke_root/bin"
 cp "$release_binary" "$smoke_root/bin/luna-agent"
+broker_log="$smoke_root/broker-launch.log"
+broker_pid=""
+pipe_name=$(
+    PYTHONPATH="$project_root/src" "$venv_python" -c \
+        'from pathlib import Path; import sys; from luna_agent_bridge.paths import AppPaths; print(AppPaths.for_user(Path(sys.argv[1])).pipe_name)' \
+        "$smoke_root"
+)
 cleanup_smoke() {
-    "$release_binary" --app-root "$smoke_root" broker shutdown --json >/dev/null 2>&1 || true
+    if [[ -n $broker_pid ]] && kill -0 "$broker_pid" >/dev/null 2>&1; then
+        if [[ -S $pipe_name ]]; then
+            "$release_binary" --app-root "$smoke_root" broker shutdown --json >/dev/null 2>&1 || true
+        fi
+        kill "$broker_pid" >/dev/null 2>&1 || true
+        wait "$broker_pid" >/dev/null 2>&1 || true
+    fi
+    if [[ -f $broker_log ]]; then
+        cat "$broker_log" >&2
+    fi
     rm -rf "$smoke_root"
 }
 trap cleanup_smoke EXIT
+"$release_binary" --app-root "$smoke_root" broker serve >"$broker_log" 2>&1 &
+broker_pid=$!
+for _ in {1..100}; do
+    if [[ -S $pipe_name ]]; then
+        break
+    fi
+    if ! kill -0 "$broker_pid" >/dev/null 2>&1; then
+        echo "macOS Broker 启动进程提前退出" >&2
+        exit 1
+    fi
+    sleep 0.1
+done
+if [[ ! -S $pipe_name ]]; then
+    echo "macOS Broker 启动超时" >&2
+    exit 1
+fi
 health_response=$($release_binary --app-root "$smoke_root" broker health --json)
 if [[ $health_response != '{"status":"ok"}' ]]; then
     echo "macOS Broker 健康检查失败：$health_response" >&2
@@ -106,6 +138,11 @@ if [[ $shutdown_response != '{"status":"stopping"}' ]]; then
     echo "macOS Broker 关闭检查失败：$shutdown_response" >&2
     exit 1
 fi
+if ! wait "$broker_pid"; then
+    echo "macOS Broker 未正常退出" >&2
+    exit 1
+fi
+broker_pid=""
 trap - EXIT
 rm -rf "$smoke_root"
 

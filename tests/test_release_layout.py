@@ -202,6 +202,9 @@ class ReleaseLayoutTests(unittest.TestCase):
             "arm64",
             "x86_64",
             "expected_architecture",
+            "broker serve",
+            "broker_pid",
+            "pipe_name",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, macos_script)

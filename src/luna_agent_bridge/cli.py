@@ -134,13 +134,13 @@ def main(argv: list[str] | None = None, client: PipeClient | None = None, paths=
         return EXIT_SUCCESS
     if client is None:
         client = PipeClient(paths, starter=lambda: _start_broker(paths))
-    if args.command == "broker":
-        command = args.broker_command
-        response = client.request(command, {})
-        return _finish_response(response, args.json, command)
     try:
-        command, params = _command_params(args)
-        response = client.request(command, params, cwd=str(Path.cwd().resolve()))
+        if args.command == "broker":
+            command = args.broker_command
+            response = client.request(command, {})
+        else:
+            command, params = _command_params(args)
+            response = client.request(command, params, cwd=str(Path.cwd().resolve()))
     except ValueError as error:
         print(str(error), file=sys.stderr)
         return EXIT_USAGE
@@ -150,7 +150,7 @@ def main(argv: list[str] | None = None, client: PipeClient | None = None, paths=
     except OSError as error:
         print(f"无法执行命令：{error}", file=sys.stderr)
         return EXIT_BROKER
-    return _finish_response(response, getattr(args, "json", False), args.command)
+    return _finish_response(response, getattr(args, "json", False), command)
 
 
 def _command_params(args: argparse.Namespace) -> tuple[str, dict[str, Any]]:
