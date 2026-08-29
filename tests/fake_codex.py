@@ -23,6 +23,8 @@ def mark_interrupt(*_args):
 signal.signal(signal.SIGTERM, mark_interrupt)
 if hasattr(signal, "SIGBREAK"):
     signal.signal(signal.SIGBREAK, mark_interrupt)
+if args.marker:
+    Path(args.marker).write_text("ready", encoding="utf-8")
 
 print(json.dumps({"type": "thread.started", "thread_id": args.fake_thread}, ensure_ascii=False), flush=True)
 if args.sleep:

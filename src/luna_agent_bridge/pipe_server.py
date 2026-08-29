@@ -53,6 +53,9 @@ class PipeServer:
                     if self._stop_event.is_set():
                         break
                     continue
+                if self._stop_event.is_set():
+                    connection.close()
+                    break
                 threading.Thread(target=self._handle_connection, args=(connection,), daemon=True).start()
         finally:
             self._listener.close()
@@ -64,7 +67,15 @@ class PipeServer:
         self._stop_event.set()
         listener = self._listener
         if listener is not None:
-            listener.close()
+            try:
+                connection = Client(
+                    self.paths.pipe_name,
+                    family=self.paths.pipe_family,
+                    authkey=load_or_create_authkey(self.paths),
+                )
+                connection.close()
+            except (OSError, EOFError, AuthenticationError):
+                listener.close()
 
     def _prepare_endpoint(self, authkey: bytes) -> None:
         """在 macOS 上拒绝覆盖活动 Socket，并清理崩溃遗留文件。"""

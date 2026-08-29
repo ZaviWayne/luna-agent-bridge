@@ -54,7 +54,10 @@ class ProcessSchedulerTests(unittest.TestCase):
                 cwd=Path(directory),
             )
             running = ProcessController().start(invocation)
-            time.sleep(0.2)
+            deadline = time.monotonic() + 3
+            while not marker.exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertEqual("ready", marker.read_text(encoding="utf-8"))
             running.interrupt(grace_seconds=1)
             self.assertIsNotNone(running.poll())
             self.assertEqual("interrupted", marker.read_text(encoding="utf-8"))
